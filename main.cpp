@@ -1,4 +1,3 @@
-
 /*
  Алгоритм
  Данн прямоугольник с x1 y1 x2 y2 c вырезом x3 y3 x4 y4
@@ -21,7 +20,7 @@
 using namespace std;
 
 double fn(double x, double  y){
-    return x*x+y*y;
+    return cos(x)*sin(y);
 }
 
 class Point{
@@ -40,6 +39,10 @@ public:
     }
 };
 
+double computeDistance(Point A, Point B){
+    return sqrt((A.x-B.x)*(A.x-B.x)+(A.y-B.y)*(A.y-B.y));
+}
+
 double fn(Point A){
     return fn(A.x, A.y);
 }
@@ -47,12 +50,38 @@ double fn(Point A){
 class Triangle{
 public:
     Point v1, v2, v3;
+    
+    vector<Point> netPointsInside;
+    
+    double square;
+    
+    double computeSquare(Point A, Point B, Point C){
+        double a, b, c, p;
+        a=computeDistance(A, B);
+        b=computeDistance(C, B);
+        c=computeDistance(A, C);
+        p=(a+b+c)/2;
+        return sqrt(p*(p-a)*(p-b)*(p-c));
+    }
+    
     vector<Point> P;
+    
     Triangle(){};
     Triangle(Point a, Point b, Point c){
         v1=a; v2=b; v3=c;
+        square=computeSquare(a, b, c);
     }
-    bool isPointInTriangle();
+    
+    bool isPointInside(Point A){
+        double epsilon=0.000001;
+        double a, b, c, S;
+        a=computeSquare(A, v1, v2);
+        b=computeSquare(A, v1, v3);
+        c=computeSquare(A, v3, v2);
+        S=a+b+c;
+        if(abs(S-square)>epsilon) return false;
+        else return true;
+    }
     
     Point computeFormula(int k, int l, int s, vector<double> x, vector<double> y){
         Point A;
@@ -256,23 +285,41 @@ void writePointsToFile(vector<Point> Points, const string& filename){
     for(int i=0; i<Points.size(); i++){
         file << Points[i].x << " " << Points[i].y << " " << Points[i].z << endl;
     }
+    cout << Points.size() << " Points writen to file" << endl;
+}
+
+vector<Point> MakeNet(double x1, double y1, double x2, double y2, int n){
+    vector<Point> Net;
+    double hx, hy;
+    hx=(x2-x1)/n; //шаг по x
+    hy=(y1-y2)/n; //шаг по y
+    for(int i=0; i<=n; i++){
+        for(int j=0; j<=n; j++){
+            Point P;
+            P.x=x1+j*hx;
+            P.y=y2+i*hy;
+            Net.push_back(P);
+        }
+    }
+    return Net;
 }
 
 
 int main(){
-    double x1=0, y1=4, x2=4, y2=0; //исходный прямоугольник
-    double x3=1, y3=2, x4=2, y4=1; //Вырезанный прямоугольник
-    
+    double x1=-10, y1=10, x2=10, y2=-10; //исходный прямоугольник
+    double x3=0, y3=5, x4=5, y4=0; //Вырезанный прямоугольник
+    int NumPointsInNet=100;
+    int NumTriangles=5;
     //Создаем вырез
     Rectangle R1(x1, y1, x2, y3);
     Rectangle R2(x1, y3, x3, y4);
     Rectangle R3(x4, y3, x2, y4);
     Rectangle R4(x1, y4, x2, y2);
     
-    vector<Rectangle> Rectangles1 = splitRectangleToSmallRectagles(R1, 4);
-    vector<Rectangle> Rectangles2 = splitRectangleToSmallRectagles(R2, 4);
-    vector<Rectangle> Rectangles3 = splitRectangleToSmallRectagles(R3, 4);
-    vector<Rectangle> Rectangles4 = splitRectangleToSmallRectagles(R4, 4);
+    vector<Rectangle> Rectangles1 = splitRectangleToSmallRectagles(R1, NumTriangles);
+    vector<Rectangle> Rectangles2 = splitRectangleToSmallRectagles(R2, NumTriangles);
+    vector<Rectangle> Rectangles3 = splitRectangleToSmallRectagles(R3, NumTriangles);
+    vector<Rectangle> Rectangles4 = splitRectangleToSmallRectagles(R4, NumTriangles);
     
     //Добавляем все 4 прямоугольных разбиения в один список
     vector<Rectangle> Rectangles;
@@ -284,14 +331,80 @@ int main(){
     //Треангуляция готова
     vector<Triangle> Triangles = splitRectanglesToTriangles(Rectangles);
     
-    //вычисляем z для всей вершин треугольника
+    Rectangle NewR(x1, y1, x2, y2);
+    vector<Rectangle> RectanglesNew = splitRectangleToSmallRectagles(NewR, NumTriangles);
+    //vector<Triangle> Triangles = splitRectanglesToTriangles(RectanglesNew);
+    cout << Triangles.size() << " Triangles" << endl;
+    
+    //вычисляем z для всех вершин треугольника
     for(int i=0; i<Triangles.size(); i++){
         Triangles[i].v1.computeZ();
         Triangles[i].v2.computeZ();
         Triangles[i].v3.computeZ();
     }
-    Triangles[0].computeP1_10();
-    writePointsToFile(Triangles[0].P, "test.txt");
+    
+    //Вычисляем для каждого треугольника площадь
+    for(int i=0; i<Triangles.size(); i++){
+        Triangles[i].square=Triangles[i].computeSquare(Triangles[i].v1, Triangles[i].v2, Triangles[i].v3);
+    }
+    
+    vector<Point> Net = MakeNet(x1, y1, x2, y2, NumPointsInNet);
+    int long long counter=0;
+    //Находим для каждой точки треугольник, которому принадлежит точка
+    for(int i=0; i<Net.size(); i++){
+        for(int j=0; j<Triangles.size(); j++){
+            if(Triangles[j].isPointInside(Net[i])){
+                counter++;
+                Triangles[j].netPointsInside.push_back(Net[i]);
+                break;
+            }
+        }
+    }
+    
+    //Вычисляем для каждого треугольника P1_10 и площадь
+    for(int i=0; i<Triangles.size(); i++){
+        Triangles[i].computeP1_10();
+    }
+    
+
+    
+    //Вычисляем интерпалиционные значения
+    vector<Point> AproxPoints;
+    
+    for(int i=0; i<Triangles.size(); i++){
+        for(int j=0; j<Triangles[i].netPointsInside.size(); j++){
+            Point XY = Triangles[i].netPointsInside[j];
+            XY.z=Triangles[i].Pf(XY);
+            AproxPoints.push_back(XY);
+        }
+    }
+    
+    //Вычисляем реальные значения
+    vector<Point> RealPoints;
+    
+    for(int i=0; i<AproxPoints.size(); i++){
+        Point A;
+        A=AproxPoints[i];
+        A.z=fn(A);
+        RealPoints.push_back(A);
+    }
+    
+    
+    
+    writePointsToFile(AproxPoints, "aprox_points.txt");
+    writePointsToFile(RealPoints, "real_points.txt");
+    
+    vector<Point> GoraGovnaPoints;
+    for(int i=0; i<AproxPoints.size(); i++){
+        Point A;
+        A.x=AproxPoints[i].x;
+        A.y=AproxPoints[i].y;
+        A.z=AproxPoints[i].z-RealPoints[i].z;
+        GoraGovnaPoints.push_back(A);
+    }
+    
+    writePointsToFile(GoraGovnaPoints, "GoraGovna_points.txt");
+    
     
     return 0;
 }

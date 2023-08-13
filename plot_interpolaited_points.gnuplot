@@ -7,13 +7,15 @@ set zlabel "Z"
 set grid
 set key off
 set view equal xyz
-set xrange [0:5]
-set yrange [0:5]
-set zrange [0:5]
+set xrange [-10:10]
+set yrange [-10:10]
+set zrange [-5:5]
 
 # Указываем наименования файлов для каждого набора данных
-interpolated_file = "test.txt"
+interpolated_points = "real_points.txt"
+aprox_points = "aprox_points.txt"
+gavno_points = "GoraGovna_points.txt"
 
 # Указываем, что у нас трехмерные данные (x, y, z)
-splot interpolated_file using 1:2:3 with points pointtype 7 pointsize 1.5 lc rgb "red" title "Interpolated Points"
+splot gavno_points using 1:2:3 with points pointtype 7 pointsize 1.5 lc rgb "red" title "Interpolated Points"
 
