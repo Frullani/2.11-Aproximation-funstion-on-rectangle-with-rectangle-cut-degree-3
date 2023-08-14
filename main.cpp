@@ -16,11 +16,12 @@
 #include <math.h>
 #include <cmath>
 #include <fstream>
+#include <random>
 
 using namespace std;
 
 double fn(double x, double  y){
-    return cos(x)*sin(y);
+    return sin(x*y);
 }
 
 class Point{
@@ -55,6 +56,8 @@ public:
     
     double square;
     
+    Point centerOfMass;
+    
     double computeSquare(Point A, Point B, Point C){
         double a, b, c, p;
         a=computeDistance(A, B);
@@ -64,12 +67,36 @@ public:
         return sqrt(p*(p-a)*(p-b)*(p-c));
     }
     
+    void computeSquare(){
+        Point A, B, C;
+        A=v1; B=v2; C=v3;
+        double a, b, c, p;
+        a=computeDistance(A, B);
+        b=computeDistance(C, B);
+        c=computeDistance(A, C);
+        p=(a+b+c)/2;
+        square = sqrt(p*(p-a)*(p-b)*(p-c));
+        
+    }
+    
+    void computeCenterofMass(){
+        centerOfMass.x=(v1.x+v2.x+v3.x)/3;
+        centerOfMass.y=(v1.y+v2.y+v3.y)/3;
+    }
+    
     vector<Point> P;
     
     Triangle(){};
     Triangle(Point a, Point b, Point c){
         v1=a; v2=b; v3=c;
         square=computeSquare(a, b, c);
+    }
+    
+    Triangle(double x1, double y1, double x2, double y2, double x3, double y3){
+        v1.x = x1; v1.y = y1;
+        v2.x = x2; v2.y = y2;
+        v3.x = x3; v3.y = y3;
+        square=computeSquare(v1, v2, v3);
     }
     
     bool isPointInside(Point A){
@@ -211,7 +238,7 @@ public:
         }
         return res;
     }
-    
+        
     
 };
 
@@ -305,15 +332,82 @@ vector<Point> MakeNet(double x1, double y1, double x2, double y2, int n){
     return Net;
 }
 
+vector<Point> generateRandomPointsInsideTriangle(Triangle triangle, int n) {
+    vector<Point> randomPoints;
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<> dis(0.0, 1.0);
 
+    for (int i = 0; i < n; ++i) {
+        double r1 = dis(gen);
+        double r2 = dis(gen);
 
-double computeIntergralOnTriagle(Triangle T, int accuracy);
+        if (r1 + r2 <= 1.0) {
+            double x = triangle.v1.x + r1 * (triangle.v2.x - triangle.v1.x) +
+                       r2 * (triangle.v3.x - triangle.v1.x);
+            double y = triangle.v1.y + r1 * (triangle.v2.y - triangle.v1.y) +
+                       r2 * (triangle.v3.y - triangle.v1.y);
+            randomPoints.push_back({x, y});
+        }
+        else i--;
+    }
+    
+    return randomPoints;
+}
+
+vector<Triangle> Make_Triangulation_Delane(Triangle MasterTriangle, vector<Point> points){
+    vector<Triangle> triangles;
+    //Найти треугольник которому принадлежит точка
+    //Созать 4 новых треугольника по 4м точкам
+    //Добавить 4 треугольника в масив
+    triangles.push_back(MasterTriangle);
+    for(int i=0; i<points.size(); i++){
+        for(int j=0; j<triangles.size(); j++){
+            if(triangles[j].isPointInside(points[i])){
+                Triangle T=triangles[j];
+                Triangle A(T.v1, T.v2, points[i]);
+                Triangle B(T.v1, points[i], T.v3);
+                Triangle C(points[i], T.v2, T.v3);
+                triangles.erase(triangles.begin() + j);
+                triangles.push_back(A);
+                triangles.push_back(B);
+                triangles.push_back(C);
+                break;
+            }
+        }
+    }
+    
+    return triangles;
+}
+
+double computeIntergralOnTriagle(Triangle T, int accuracy){
+    vector<Point> Points = generateRandomPointsInsideTriangle(T, accuracy);
+    vector<Triangle> Triangulation = Make_Triangulation_Delane(T, Points);
+    for(int i=0; i<Triangulation.size(); i++){
+        Triangulation[i].computeCenterofMass();
+        Triangulation[i].centerOfMass.computeZ();
+        Triangulation[i].computeSquare();
+    }
+    double Integral=0;
+    
+    for(int i=0; i<Triangulation.size(); i++){
+        Integral += Triangulation[i].square*Triangulation[i].centerOfMass.z;
+    }
+    return Integral;
+}
 
 int main(){
     double x1=-10, y1=10, x2=10, y2=-10; //исходный прямоугольник
     double x3=0, y3=5, x4=5, y4=0; //Вырезанный прямоугольник
     int NumPointsInNet=100;
     int NumTriangles=5;
+    
+    //Проба работы интегралла
+    Triangle I1(0, 0, 0, 2, 2, 0);
+    Triangle I2(2, 2, 0, 2, 2, 0);
+    cout << computeIntergralOnTriagle(I1, 100)+computeIntergralOnTriagle(I2, 100) << endl;
+    cout << computeIntergralOnTriagle(I1, 1000)+computeIntergralOnTriagle(I2, 1000) << endl;
+    
     //Создаем вырез
     Rectangle R1(x1, y1, x2, y3);
     Rectangle R2(x1, y3, x3, y4);
@@ -369,8 +463,6 @@ int main(){
     for(int i=0; i<Triangles.size(); i++){
         Triangles[i].computeP1_10();
     }
-    
-
     
     //Вычисляем интерпалиционные значения
     vector<Point> AproxPoints;
