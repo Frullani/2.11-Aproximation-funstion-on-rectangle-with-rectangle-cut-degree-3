@@ -212,6 +212,7 @@ public:
         return res;
     }
     
+    
 };
 
 //Важно что каждый прямоугольник записывается как
@@ -304,6 +305,9 @@ vector<Point> MakeNet(double x1, double y1, double x2, double y2, int n){
     return Net;
 }
 
+
+
+double computeIntergralOnTriagle(Triangle T, int accuracy);
 
 int main(){
     double x1=-10, y1=10, x2=10, y2=-10; //исходный прямоугольник
