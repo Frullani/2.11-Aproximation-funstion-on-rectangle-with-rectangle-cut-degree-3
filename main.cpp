@@ -17,6 +17,7 @@
 #include <cmath>
 #include <fstream>
 #include <random>
+#include "SolveByGaus.hpp"
 
 using namespace std;
 
@@ -238,6 +239,7 @@ public:
         }
         return res;
     }
+    
         
     
 };
@@ -296,7 +298,6 @@ vector<Rectangle> splitRectangleToSmallRectagles(Rectangle A, int n){
     }
     return Rectagles;
 }
-
 vector<Triangle> splitRectanglesToTriangles(vector<Rectangle> Rectangle){
     vector<Triangle> Triangles;
     for(int i=0; i<Rectangle.size(); i++){
@@ -396,11 +397,97 @@ double computeIntergralOnTriagle(Triangle T, int accuracy){
     return Integral;
 }
 
+double multipleTwoFi(int i, int j, Point A, Triangle T){
+    
+    return T.computeFi(i, A)*T.computeFi(j, A);
+}
+
+double multipleFonFi(int i, Point A, Triangle T){
+    return fn(A)*T.computeFi(i, A);
+}
+
+//Вычисляем левый интегралл в системе, для этого разбиваем треугольник на маленькие и умножаем площадь каждого на центр масс
+double computeIntergralOnTriagle(Triangle T, int accuracy, int i, int j){
+    vector<Point> Points = generateRandomPointsInsideTriangle(T, accuracy);
+    vector<Triangle> Triangulation = Make_Triangulation_Delane(T, Points);
+    
+    for(int h=0; h<Triangulation.size(); h++){
+        Triangulation[h].P=T.P;
+    }
+    
+    for(int t=0; t<Triangulation.size(); t++){
+        Triangulation[t].computeCenterofMass();
+        Triangulation[t].centerOfMass.z = multipleTwoFi(i, j, Triangulation[t].centerOfMass, Triangulation[t]);
+        Triangulation[t].computeSquare();
+    }
+    
+    double Integral=0;
+    
+    for(int i=0; i<Triangulation.size(); i++){
+        Integral += Triangulation[i].square*Triangulation[i].centerOfMass.z;
+    }
+    
+    return Integral;
+}
+
+double computeIntergralOnTriagle(Triangle T, int accuracy, int i){
+    vector<Point> Points = generateRandomPointsInsideTriangle(T, accuracy);
+    vector<Triangle> Triangulation = Make_Triangulation_Delane(T, Points);
+    
+    for(int h=0; h<Triangulation.size(); h++){
+        Triangulation[h].P=T.P;
+    }
+    
+    for(int t=0; t<Triangulation.size(); t++){
+        Triangulation[t].computeCenterofMass();
+        Triangulation[t].centerOfMass.z = multipleFonFi(i, Triangulation[t].centerOfMass, Triangulation[t]);
+        Triangulation[t].computeSquare();
+    }
+    
+    double Integral=0;
+    
+    for(int i=0; i<Triangulation.size(); i++){
+        Integral += Triangulation[i].square*Triangulation[i].centerOfMass.z;
+    }
+    
+    return Integral;
+}
+
+vector<vector<double>> computeAlphaMatrix(vector<Triangle> Triangulation, int accuracy){
+    vector<vector<double>> alphaMatrix;
+    for(int i=1; i<=10; i++){
+        vector<double> help;
+        for(int j=1; j<=10; j++){
+            double a=0;
+            for(int l=0; l<Triangulation.size(); l++){
+                a+=computeIntergralOnTriagle(Triangulation[l], accuracy, i, j);
+            }
+            help.push_back(a);
+        }
+        alphaMatrix.push_back(help);
+    }
+    return alphaMatrix;
+}
+
+vector<double> computeBetaMatrix(vector<Triangle> Triangulation, int accuracy){
+    vector<double> betaMatrix;
+    for(int i=1; i<=10; i++){
+        double a=0;
+        for(int l=0; l<Triangulation.size(); l++){
+            a+=computeIntergralOnTriagle(Triangulation[l], accuracy, i);
+        }
+        betaMatrix.push_back(a);
+    }
+    return betaMatrix;
+}
+
+
 int main(){
     double x1=-10, y1=10, x2=10, y2=-10; //исходный прямоугольник
     double x3=0, y3=5, x4=5, y4=0; //Вырезанный прямоугольник
-    int NumPointsInNet=100;
-    int NumTriangles=5;
+    int NumPointsInNet=100; //Параметр отвечающий за густоту сетки
+    int NumTriangles=5; //Параметр отвечающий за колличестов треугольников
+    int IntAccuracy=2000; //точность взятия интеграла
     
     //Проба работы интегралла
     Triangle I1(0, 0, 0, 2, 2, 0);
@@ -446,13 +533,13 @@ int main(){
         Triangles[i].square=Triangles[i].computeSquare(Triangles[i].v1, Triangles[i].v2, Triangles[i].v3);
     }
     
+    //Создаем сетку для отрисовки
     vector<Point> Net = MakeNet(x1, y1, x2, y2, NumPointsInNet);
-    int long long counter=0;
+    
     //Находим для каждой точки треугольник, которому принадлежит точка
     for(int i=0; i<Net.size(); i++){
         for(int j=0; j<Triangles.size(); j++){
             if(Triangles[j].isPointInside(Net[i])){
-                counter++;
                 Triangles[j].netPointsInside.push_back(Net[i]);
                 break;
             }
@@ -464,16 +551,30 @@ int main(){
         Triangles[i].computeP1_10();
     }
     
+    //Вычисляем Значения Альфа
+    vector<vector<double>> FirstM;
+    vector<double> SecondM;
+    FirstM = computeAlphaMatrix(Triangles, IntAccuracy);
+    SecondM = computeBetaMatrix(Triangles, IntAccuracy);
+    
+    vector<double> alphas;
+    alphas.push_back(0);
+    alphas = solveEquations(FirstM, SecondM);
     //Вычисляем интерпалиционные значения
     vector<Point> AproxPoints;
     
     for(int i=0; i<Triangles.size(); i++){
         for(int j=0; j<Triangles[i].netPointsInside.size(); j++){
             Point XY = Triangles[i].netPointsInside[j];
+            XY.z=0;
+            for(int k=1; k<=10; k++){
+                XY.z+=Triangles[i].computeFi(k, XY)*alphas[k];
+            }
             XY.z=Triangles[i].Pf(XY);
             AproxPoints.push_back(XY);
         }
     }
+    
     
     //Вычисляем реальные значения
     vector<Point> RealPoints;
@@ -484,7 +585,6 @@ int main(){
         A.z=fn(A);
         RealPoints.push_back(A);
     }
-    
     
     
     writePointsToFile(AproxPoints, "aprox_points.txt");
